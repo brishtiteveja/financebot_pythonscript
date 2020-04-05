@@ -457,8 +457,9 @@ def parallel_history_func(i, exchange):
 
     from_datetime_pair = from_datetime
     # check whether already imported, then get last starttime
-    #if len(last_starttime) > 0 and i < len(last_starttime):
-    from_datetime_pair = last_starttime[market_pair]
+    print(last_starttime)
+    if not last_starttime == False:
+        from_datetime_pair = last_starttime[market_pair]
 
     get_historical_data_for_market_pair(i, market_pair, exchange, timeframe, from_datetime_pair, now) 
 
@@ -588,15 +589,9 @@ def get_historical_data(exchange_id, from_datetime):
     global batch_import_finished
     batch_import_finished = False 
     initial = True
+    get_last_starttime_from_sql(exchange_id, market_pairs)
     while True:
         if initial:
-            get_last_starttime_from_sql(exchange_id, market_pairs)
-            if to_datetime == None:
-                now = exchange.milliseconds()
-            else:
-                now_datetime = to_datetime
-                now = exchange.parse8601(now_datetime)
-
             run_parallel_market_import(exchange)
             initial = False
 
@@ -608,6 +603,14 @@ def get_historical_data(exchange_id, from_datetime):
             print("Now sleeping.")
             time.sleep(20)
             print("Resuming import of all market pairs.")
+
+            get_last_starttime_from_sql(exchange_id, market_pairs)
+            if to_datetime == None:
+                now = exchange.milliseconds()
+            else:
+                now_datetime = to_datetime
+                now = exchange.parse8601(now_datetime)
+
             initial = True
             
 

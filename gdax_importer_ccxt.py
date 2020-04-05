@@ -167,11 +167,17 @@ def save_data_to_table(df, table_name, database):
 
         new = existing.append(to_insert)
         new = new[~new.duplicated(keep='first')]
-        new = new.drop("id", axis=1)
+
+        if new.shape[0] <= 0:
+            return
+        
+        if "id" in new.columns:
+            new = new.drop("id", axis=1)
         new = new.reset_index().rename(columns={"index":"start"})
         new = new.drop_duplicates(subset="start")
         new = new.reset_index().rename(columns={"index":"id"})
-        new = new.drop("id", axis=1)
+        if "id" in new.columns:
+            new = new.drop("id", axis=1)
         new["start"] = new["start"]/msec
         new = new[new["start"] > last_start_in_df]
 
@@ -192,11 +198,17 @@ def save_data_to_table(df, table_name, database):
 
         new = existing.append(to_insert)
         new = new[~new.duplicated(keep='first')]
-        new = new.drop("id", axis=1)
+
+        if new.shape[0] <= 0:
+            return
+
+        if "id" in new.columns:
+            new = new.drop("id", axis=1)
         new = new.reset_index().rename(columns={"index":"start"})
         new = new.drop_duplicates(subset="start")
         new = new.reset_index().rename(columns={"index":"id"})
-        new = new.drop("id", axis=1)
+        if "id" in new.columns:
+            new = new.drop("id", axis=1)
         new["start"] = new["start"]/msec
 
         try:
@@ -457,8 +469,9 @@ def parallel_history_func(i, exchange):
 
     from_datetime_pair = from_datetime
     # check whether already imported, then get last starttime
-    #if len(last_starttime) > 0 and i < len(last_starttime):
-    from_datetime_pair = last_starttime[market_pair]
+    print(last_starttime)
+    if not last_starttime == False:
+        from_datetime_pair = last_starttime[market_pair]
 
     get_historical_data_for_market_pair(i, market_pair, exchange, timeframe, from_datetime_pair, now) 
 
@@ -537,22 +550,27 @@ def get_last_starttime_from_sql(exchange_id, market_pairs):
 
     for i, market_pair in enumerate(market_pairs):
         table_name = get_table_name(market_pair)
+
+        starttime = from_datetime
+
         if check_table_exists(conn, table_name):
             query = "SELECT start from " + table_name + " ORDER BY start DESC limit 1"
             startDF= pd.read_sql(query, con=conn )
-            start = startDF.start[0] 
             try:
-                starttime = datetime.datetime.utcfromtimestamp(start).strftime("%Y-%m-%d %H:%M:%S")
+                start = startDF.start[0] 
+                try:
+                    starttime = datetime.datetime.utcfromtimestamp(start).strftime("%Y-%m-%d %H:%M:%S")
+                except Exception as e:
+                    print(e)
             except Exception as e:
                 print(e)
-                starttime = datetime.datetime.utcfromtimestamp(start/1000).strftime("%Y-%m-%d %H:%M:%S")
+                starttime = from_datetime
+                
 
-            last_starttime[market_pair] = starttime
-        else:
-            last_starttime[market_pair] = from_datetime 
+        last_starttime[market_pair] = starttime
 
-            print("market pair " + str(i) + ":" + market_pair)
-            print(last_starttime[market_pair])
+        print("market pair " + str(i) + ":" + market_pair)
+        print(last_starttime[market_pair])
 
 def get_historical_data(exchange_id, from_datetime):
     if exchange_id == 'coinbasepro' :
@@ -588,15 +606,9 @@ def get_historical_data(exchange_id, from_datetime):
     global batch_import_finished
     batch_import_finished = False 
     initial = True
+    get_last_starttime_from_sql(exchange_id, market_pairs)
     while True:
         if initial:
-            get_last_starttime_from_sql(exchange_id, market_pairs)
-            if to_datetime == None:
-                now = exchange.milliseconds()
-            else:
-                now_datetime = to_datetime
-                now = exchange.parse8601(now_datetime)
-
             run_parallel_market_import(exchange)
             initial = False
 
@@ -606,8 +618,16 @@ def get_historical_data(exchange_id, from_datetime):
             #time.sleep(10)
             batch_import_finished = False
             print("Now sleeping.")
-            time.sleep(hold)
+            time.sleep(20)
             print("Resuming import of all market pairs.")
+
+            get_last_starttime_from_sql(exchange_id, market_pairs)
+            if to_datetime == None:
+                now = exchange.milliseconds()
+            else:
+                now_datetime = to_datetime
+                now = exchange.parse8601(now_datetime)
+
             initial = True
             
 
