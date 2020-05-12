@@ -25,7 +25,7 @@ async def poll():
             yield await exchange.fetch_order_book(market_pair)
             await asyncio.sleep(exchange.rateLimit / 1000)
 
-            exchange.close()
+            yield await exchange.close()
             break
         except Exception as e:
             print("Exception Occurred")
@@ -198,7 +198,7 @@ async def main():
         dataDF.index.rename('id')
         print(dataDF)
         print("Saving order book to database")
-        save_orderbook_to_sqlite_database(dataDF, exchange, market_pair);
+        #save_orderbook_to_sqlite_database(dataDF, exchange, market_pair);
         print("Finished Saving order book to database")
 
         print("\n \n")

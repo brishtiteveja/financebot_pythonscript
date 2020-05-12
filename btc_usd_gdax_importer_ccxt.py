@@ -340,6 +340,7 @@ def get_historical_data_from_timestamp(parallel_func_id, market_pair, exchange, 
     last_id = 0
     no_fetch = 0
     print("First from timestamp = ", from_timestamp)
+    print('1.Fetching candles starting from', exchange.iso8601(from_timestamp))
 
     while from_timestamp < now:
         try:
@@ -356,7 +357,7 @@ def get_historical_data_from_timestamp(parallel_func_id, market_pair, exchange, 
             #lock.acquire()
 
             print("Inside importing id: ", parallel_func_id ," pair:", market_pair)
-            print('Fetching candles starting from', exchange.iso8601(from_timestamp))
+            print('2.Fetching candles starting from', exchange.iso8601(from_timestamp))
             print( date, ': ',  'Fetched', len(ohlcvs), 'candles')
 
             '''
@@ -590,6 +591,12 @@ def get_historical_data(exchange_id, from_datetime):
     batch_import_finished = False 
     initial = True
     get_last_starttime_from_sql(exchange_id, market_pairs)
+    if to_datetime == None:
+        now = exchange.milliseconds()
+    else:
+        now_datetime = to_datetime
+        now = exchange.parse8601(now_datetime)
+
     while True:
         if initial:
             run_parallel_market_import(exchange)
@@ -605,11 +612,7 @@ def get_historical_data(exchange_id, from_datetime):
             print("Resuming import of all market pairs.")
 
             get_last_starttime_from_sql(exchange_id, market_pairs)
-            if to_datetime == None:
-                now = exchange.milliseconds()
-            else:
-                now_datetime = to_datetime
-                now = exchange.parse8601(now_datetime)
+            now = exchange.milliseconds()
 
             initial = True
             
