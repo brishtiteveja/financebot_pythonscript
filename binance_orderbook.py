@@ -12,7 +12,9 @@ sys.path.append(root + '/python')
 import ccxt.async_support as ccxt  # noqa: E402
 
 root = "../../history/latest"
-market_pair = 'BTC/USD'
+market_pair = 'BTC/USDT'
+
+exchange_id = "binance"
 
 exchange = None
 conn = None
@@ -25,7 +27,6 @@ def create_connection(db_file):
     """
     conn = None
     try:
-        print(db_file)
         conn = sqlite3.connect(db_file)
         return conn
     except Exception as e:
@@ -43,7 +44,7 @@ def create_table(conn, create_table_sql):
     try:
         c = conn.cursor()
         c.execute(create_table_sql)
-    except Error as e:
+    except Exception as e:
         print(e)
 
 def check_table_exists(conn, table_name):
@@ -111,7 +112,7 @@ def save_orderbook_to_sqlite_database(df, exchange, market_pair):
        if exchange_id == "coinbasepro":
            exchange_id = "gdax_0.1"
        elif exchange_id == "binance":
-           exchange_id = "binance_0.1"
+           exchange_id = "binance"
 
        db_file = root + "/" + exchange_id + "_orderbook.db"
 
@@ -125,10 +126,14 @@ def save_orderbook_to_sqlite_database(df, exchange, market_pair):
 
 async def poll():
     global exchange, market_pair
-    exchange = ccxt.coinbasepro()
+    if exchange_id == "coinbasepro":
+        exchange = ccxt.coinbasepro()
+    elif exchange_id == "binance":
+        exchange = ccxt.binance()
+
     while True:
         try:
-            yield await exchange.fetch_order_book(market_pair, 1000)
+            yield await exchange.fetch_order_book(market_pair, 10000)
             await asyncio.sleep(exchange.rateLimit / 1000)
 
             yield await exchange.close()
@@ -159,7 +164,7 @@ async def main():
                     a = orderbook['asks'][i]
     
                     s = "{0:3}: Bid: [{1:15}, {2:15}], Ask: [{3:15}, {4:15} - {5}]".format(i, b[0], b[1], a[0], a[1], time)
-                    print(s)
+                    #print(s)
                    
                     i += 1
     
@@ -171,7 +176,7 @@ async def main():
                     df['ask_amount'] = a[1]
     
                     dataDF = dataDF.append(df)
-                    print(dataDF.shape)
+                    #print(dataDF.shape)
                      
                 else:
                     j = i
