@@ -11,7 +11,7 @@ import pandas as pd
 #file root
 froot = os.path.dirname(os.path.abspath(__file__))
 #history root
-root = "../../history/latest/gdaxbtcusd"
+root = "/Users/andy/.finance_bot/gekko/history/latest/gdaxbtcusd"
 
 cur_datetime = datetime.datetime.now().strftime("%d-%m-%Y_%H:%M:%S")
 
