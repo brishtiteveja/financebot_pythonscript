@@ -33,8 +33,8 @@ do
 
        if [[ $(( $COUNTER % $FILLRUN )) -eq 0 ]]
        then
-          echo "Filling db gaps"
-          time python3 $python_path/fill_db_gaps.py $latest_path/$exchange_db_file $start_date > log_fill_db_gaps.txt 
+          #echo "Filling db gaps"
+          #time python3 $python_path/fill_db_gaps.py $latest_path/$exchange_db_file $start_date > log_fill_db_gaps.txt 
        fi
 
 
@@ -43,7 +43,7 @@ do
        time cp $latest_path/$exchange_db_file $history_path 
     fi
 
-	sleep 5
+	sleep 15
 
 	#sleep 1000
 done
