@@ -13,7 +13,7 @@ do
 		echo "Already running"
 	fi
 
-	sleep 5
+	sleep 15
 
 	#sleep 1000
 done
