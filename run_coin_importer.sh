@@ -33,14 +33,17 @@ do
 
        if [[ $(( $COUNTER % $FILLRUN )) -eq 0 ]]
        then
+		  echo ""
           #echo "Filling db gaps"
           #time python3 $python_path/fill_db_gaps.py $latest_path/$exchange_db_file $start_date > log_fill_db_gaps.txt 
        fi
 
+       #python3 history/python/update_binance_market.py > exchange/wrappers/binance-markets.json
+
 
        # copy to the history directory so that gekko have access to db
        echo "Copying database to gekko history directory"
-       time cp $latest_path/$exchange_db_file $history_path 
+       #time cp $latest_path/$exchange_db_file $history_path 
     fi
 
 	sleep 15

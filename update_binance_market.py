@@ -57,4 +57,4 @@ for market_pair in market_pairs:
     dict["markets"].append(market)
 
 jp = json.dumps(dict, indent = 4, sort_keys=True)
-#print(jp)
+print(jp)

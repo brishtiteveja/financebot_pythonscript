@@ -589,7 +589,9 @@ def get_last_starttime_from_sql(exchange_id, market_pairs):
     
     last_starttime_df["active"] = ap
 
+    pd.set_option("display.max_rows", None)
     print(last_starttime_df)
+    pd.set_option("display.max_rows", 20)
     #print(last_starttime_df)
 
 def get_historical_data(exchange_id, from_datetime):
