@@ -110,6 +110,9 @@ def get_first_last_starttime_from_sql(exchange_id, market_pairs):
         print("Error creating connection")
         sys.exit(1)
 
+    global from_datetime
+    global first_starttime, last_starttime
+    global last_starttime_df, first_starttime_df, first_last_starttime_df
 
     for i, market_pair in enumerate(all_market_pairs):
         table_name = get_table_name(market_pair)
@@ -165,7 +168,6 @@ def get_first_last_starttime_from_sql(exchange_id, market_pairs):
             #print("market pair " + str(i) + ":" + market_pair)
             #print(last_starttime[market_pair])
 
-    global last_starttime_df, first_starttime_df, first_last_starttime_df
     last_starttime_df = pd.DataFrame.from_dict(last_starttime, orient='index', columns=["last_starttime"])
     last_starttime_df = last_starttime_df.rename_axis("market_pair")
 
@@ -179,15 +181,18 @@ def get_first_last_starttime_from_sql(exchange_id, market_pairs):
     last_starttime_df["active"] = ap
     first_starttime_df["active"] = ap
 
+    last_starttime_df = last_starttime_df.sort_index()
+    first_starttime_df = first_starttime_df.sort_index()
+    pd.set_option("display.max_rows", None)
 
-    first_last_starttime_df = pd.DataFrame(first_starttime_df)
+
+    first_last_starttime_df = pd.DataFrame(first_starttime_df, copy=True)
     first_last_starttime_df["last_starttime"] = last_starttime_df["last_starttime"] 
     reordered_cols = ["first_starttime", "last_starttime", "active"]
     first_last_starttime_df = first_last_starttime_df[reordered_cols]
     first_last_starttime_df = first_last_starttime_df[reordered_cols]
     first_last_starttime_df = first_last_starttime_df.sort_index()
 
-    pd.set_option("display.max_rows", None)
     '''
     print(first_starttime_df)
     print("\n\n ******************** \n \n")
