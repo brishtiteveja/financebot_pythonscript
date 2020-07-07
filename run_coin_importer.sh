@@ -42,7 +42,8 @@ do
 
 
        # copy to the history directory so that gekko have access to db
-       echo "Copying database to gekko history directory"
+       #echo "Copying database to gekko history directory"
+	   echo ""
        #time cp $latest_path/$exchange_db_file $history_path 
     fi
 
