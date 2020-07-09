@@ -7,7 +7,9 @@ import multiprocessing
 import sqlite3
 import ccxt  # noqa: E402
 import pandas as pd
+import numpy as np
 import pprint as pp
+import copy
 
 #file root
 froot = os.path.dirname(os.path.abspath(__file__))
@@ -65,7 +67,13 @@ from_datetime = '2020-01-01 00:00:00'
 to_datetime = None
 
 last_starttime = {} 
+prev_last_starttime = {}
 last_starttime_df = None 
+first_last_starttime_df = None
+
+first_starttime = {} 
+prev_first_starttime = {}
+first_starttime_df = None 
 exchange_id = 'binance' #'coinbasepro'
 exchange_list = ['gdax', 'binance', 'bittrex', 'hitbtc', 'bitstamp', 'bitfinex', 'gemini', 'huobi']
 exchanges = {}
@@ -165,6 +173,8 @@ def save_data_to_table(df, table_name, database):
     global conn 
     conn = create_connection(database)
     create_table_with_name(conn, table_name, database)
+    savedDB = False
+
     try:
         #print("Getting last few rows and trying to append in the table")
         existing = pd.read_sql("SELECT * from " + table_name + " order by start desc limit 1", con=conn)
@@ -192,10 +202,13 @@ def save_data_to_table(df, table_name, database):
             print("1. Last starttime for market pair updated") 
         else:
             print("No new data to append to the table yet.")
+
+        savedDB = True
     except Exception as e:
         print("Initial failure to append: {}\n".format(e))
         print("Attempting to rectify...")
         # this is problematic when existing table is very big
+        '''
         existing = pd.read_sql("SELECT * from " + table_name, con=conn)
         existing = existing.set_index("start")
 
@@ -235,13 +248,18 @@ def save_data_to_table(df, table_name, database):
 
             last_starttime_df.to_sql("last_starttime", con=conn, index=True, if_exists="replace")
             print("2. Last starttime for market pair updated") 
+            print('Success after dedupe')
+
+            savedDB = True
         except Exception as e2:
             print("Error occurred in saving the new table.")
             print(e2)
-        print('Success after dedupe')
+        '''
     except Exception as e:
         print("Fake exception for testing.")
         print(e)
+
+    return savedDB
 
 
 def get_table_name(market_pair):
@@ -254,6 +272,8 @@ def get_table_name(market_pair):
        
        
 def save_to_sqlite_database(df, exchange, market_pair, timeframe, from_timestamp, now_timestamp):
+    savedDB = False
+
     try:
        from_datetime_f = "_".join(from_datetime.split(" "))
        exchange_id = str(exchange)
@@ -270,14 +290,25 @@ def save_to_sqlite_database(df, exchange, market_pair, timeframe, from_timestamp
        table_name = get_table_name(market_pair)
 
        print("Appending to the sqlite table", table_name)
-       save_data_to_table(df, table_name, db_file)
+       attempt = 0
+       while savedDB == False:
+           savedDB = save_data_to_table(df, table_name, db_file)
+           attempt += 1
+           if attempt == 10:
+               break
+
     except Exception as e:
        print(e)
+
+    return savedDB
 
 def find_next_from_timestamp(parallel_func_id, market_pair, exchange, timeframe, search_timeframe_ix, from_timestamp, now): 
     global timeframe_list, search_timeframe
 
     next_from_timestamp = from_timestamp
+
+    return from_timestamp + search_timeframe['min']
+
     print("Searching for next available starttime starting from timestamp = ", from_timestamp)
     print('Fetching candles starting from', exchange.iso8601(from_timestamp))
 
@@ -399,9 +430,13 @@ def get_historical_data_from_timestamp(parallel_func_id, market_pair, exchange, 
                 global last_starttime_df
                 try:
                     tst = ohlcvs[-1][0]
-                    last_starttime_df.loc[market_pair, ["last_starttime"]] = datetime.datetime.utcfromtimestamp(tst).strftime("%Y-%m-%d %H:%M:%S")
+                    tdate = datetime.datetime.utcfromtimestamp(tst).strftime("%Y-%m-%d %H:%M:%S")
+                    last_starttime_df.loc[market_pair, ["last_starttime"]] = tdate 
+                    last_starttime[market_pair] = tdate 
                 except Exception as e:
-                    last_starttime_df.loc[market_pair, ["last_starttime"]] = datetime.datetime.utcfromtimestamp(tst/msec).strftime("%Y-%m-%d %H:%M:%S")
+                    tdate = datetime.datetime.utcfromtimestamp(tst/msec).strftime("%Y-%m-%d %H:%M:%S")
+                    last_starttime_df.loc[market_pair, ["last_starttime"]] = tdate
+                    last_starttime[market_pair] = tdate 
                     print("Success updating last_starttime_df with ", market_pair, " ", last_starttime_df.loc[market_pair])
             else:
                 #'''
@@ -452,16 +487,21 @@ def get_historical_data_from_timestamp(parallel_func_id, market_pair, exchange, 
 
             #print(dataDF.describe())
             print("Saving data frame to database.")
-            save_to_sqlite_database(dataDF, exchange, market_pair, timeframe, from_timestamp, now)
+            savedDB = False
+            while savedDB == False:
+                savedDB = save_to_sqlite_database(dataDF, exchange, market_pair, timeframe, from_timestamp, now)
+                attempt += 1
+                if attempt == 10:
+                    break
             print("Saveddatabase.\n")
 
             #lock.release()
         except (ccxt.ExchangeError, ccxt.AuthenticationError, ccxt.ExchangeNotAvailable, ccxt.RequestTimeout) as error:
             #print('Got an error', type(error).__name__, error.args, ', retrying in', hold, 'seconds...')
-            #print("Timeout error. Retry.")
+            print("Timeout error. Retry.")
             time.sleep(hold)
         except Exception as error:
-            #print('Unknown Exception')
+            print('Unknown Exception')
             #print('Got an error', type(error).__name__, error.args, ', retrying in', hold, 'seconds...')
             time.sleep(hold)
 
@@ -547,7 +587,7 @@ def run_parallel_market_import(exchange):
 def find_gaps_in_table(database, table_name):
     return
 
-def get_last_starttime_from_sql(exchange_id, market_pairs):
+def get_first_last_starttime_from_sql(exchange_id, market_pairs):
     if exchange_id == "coinbasepro":
         exchange_id = "gdax_0.1"
 
@@ -559,10 +599,27 @@ def get_last_starttime_from_sql(exchange_id, market_pairs):
         print("Error creating connection")
         sys.exit(1)
 
+    global from_datetime
+    global first_starttime, last_starttime, prev_first_starttime, prev_last_starttime
+    global last_starttime_df, first_starttime_df, first_last_starttime_df
 
+    ap = {} 
     for i, market_pair in enumerate(all_market_pairs):
         table_name = get_table_name(market_pair)
-        last_starttime[market_pair] = from_datetime 
+
+        ap[market_pair] = markets[market_pair]['active']
+
+        if len(prev_first_starttime.keys()) == 0:
+            first_starttime[market_pair] = from_datetime 
+        else:
+            first_starttime[market_pair] = prev_first_starttime[market_pair] 
+
+        if len(prev_last_starttime.keys()) == 0:
+            last_starttime[market_pair] = from_datetime 
+        else:
+            last_starttime[market_pair] = prev_last_starttime[market_pair] 
+            continue
+
         if check_table_exists(conn, table_name):
             query = "SELECT start from " + table_name + " ORDER BY start DESC limit 1"
             startDF= pd.read_sql(query, con=conn )
@@ -570,6 +627,16 @@ def get_last_starttime_from_sql(exchange_id, market_pairs):
                 if len(startDF.start) == 0:
                     continue
                 start = startDF.start[0] 
+
+                # fix some of the wierd insertion of start time due to msec, sec 
+                # ultimately these need to be fixed
+                while isinstance(start, float) and (np.ceil(start) != np.floor(start)):
+                    start = start * 1000
+
+                start = int(start) 
+                while len(str(start)) != 10:
+                    start = start * 1000
+
                 starttime = datetime.datetime.utcfromtimestamp(start).strftime("%Y-%m-%d %H:%M:%S")
                 last_starttime[market_pair] = starttime
             except Exception as e:
@@ -577,22 +644,64 @@ def get_last_starttime_from_sql(exchange_id, market_pairs):
 
                 last_starttime[market_pair] = starttime
 
+
+            query = "SELECT start from " + table_name + " ORDER BY start ASC limit 1"
+            startDF= pd.read_sql(query, con=conn )
+            try:
+                if len(startDF.start) == 0:
+                    continue
+                start = startDF.start[0] 
+
+                # fix some of the wierd insertion of start time due to msec, sec 
+                # ultimately these need to be fixed
+                while isinstance(start, float) and (np.ceil(start) != np.floor(start)):
+                    start = start * 1000
+
+                start = int(start) 
+                while len(str(start)) != 10:
+                    start = start * 1000
+
+                starttime = datetime.datetime.utcfromtimestamp(start).strftime("%Y-%m-%d %H:%M:%S")
+                first_starttime[market_pair] = starttime
+            except Exception as e:
+                starttime = datetime.datetime.utcfromtimestamp(start/1000).strftime("%Y-%m-%d %H:%M:%S")
+
+                first_starttime[market_pair] = starttime
+
             #print("market pair " + str(i) + ":" + market_pair)
             #print(last_starttime[market_pair])
 
-    global last_starttime_df
     last_starttime_df = pd.DataFrame.from_dict(last_starttime, orient='index', columns=["last_starttime"])
     last_starttime_df = last_starttime_df.rename_axis("market_pair")
-    ap = []
-    for p in all_market_pairs: 
-        ap.append(markets[p]['active'])
+
+    first_starttime_df = pd.DataFrame.from_dict(first_starttime, orient='index', columns=["first_starttime"])
+    first_starttime_df = first_starttime_df.rename_axis("market_pair")
     
-    last_starttime_df["active"] = ap
+    new_ap = []
+    for p in last_starttime.keys():
+        new_ap.append(ap[p])
+        
+    last_starttime_df["active"] = new_ap
+    first_starttime_df["active"] = new_ap
+    last_starttime_df = last_starttime_df.sort_index()
+    first_starttime_df = first_starttime_df.sort_index()
+
+
+    first_last_starttime_df = pd.DataFrame(first_starttime_df, copy=True)
+    first_last_starttime_df["last_starttime"] = last_starttime_df["last_starttime"] 
+    reordered_cols = ["first_starttime", "last_starttime", "active"]
+    first_last_starttime_df = first_last_starttime_df[reordered_cols]
+    first_last_starttime_df = first_last_starttime_df[reordered_cols]
+    first_last_starttime_df = first_last_starttime_df.sort_index()
 
     pd.set_option("display.max_rows", None)
-    print(last_starttime_df)
+
+    cond = (first_last_starttime_df["active"] == True)
+    df = first_last_starttime_df[cond]
+    #cond = (df["last_starttime"].str.contains("2020-01"))
+    #df = df[cond]
+    print(df)
     pd.set_option("display.max_rows", 20)
-    #print(last_starttime_df)
 
 def get_historical_data(exchange_id, from_datetime):
     exchange = getattr(ccxt, exchange_id)({
@@ -603,7 +712,10 @@ def get_historical_data(exchange_id, from_datetime):
 
     print(str(exchange) +  " data to be imported.")
 
-    global now
+    global now, conn
+    global markets, market_pairs, all_market_pairs
+    global first_starttime, last_starttime, last_starttime_df, prev_first_starttime, prev_last_starttime
+
     if to_datetime == None:
         now = exchange.milliseconds()
     else:
@@ -614,12 +726,10 @@ def get_historical_data(exchange_id, from_datetime):
         print("From date = ", from_datetime)
         print("To date = ", to_datetime)
 
-    global markets, market_pairs, all_market_pairs
     markets = exchange.load_markets()
 
     all_market_pairs = list(markets.keys())
     print("Total active/inactive market pairs = ", len(all_market_pairs))
-    global market_pairs
     market_pairs = []
     for market_pair in markets:
         market = markets[market_pair]
@@ -631,11 +741,12 @@ def get_historical_data(exchange_id, from_datetime):
     #market_pairs = ['ATOM/BTC', 'KNC/BTC', 'ATOM/USD']
     #market_pairs = ['BTC/USDT']
     #market_pairs = ['KMD/ETH']
+    #market_pairs = ['STRAT/ETH']
 
     global batch_import_finished
     batch_import_finished = False 
     initial = True
-    get_last_starttime_from_sql(exchange_id, market_pairs)
+    get_first_last_starttime_from_sql(exchange_id, market_pairs)
 
     if to_datetime == None:
         now = exchange.milliseconds()
@@ -657,10 +768,18 @@ def get_historical_data(exchange_id, from_datetime):
             time.sleep(20)
             print("Resuming import of all market pairs.")
 
-            get_last_starttime_from_sql(exchange_id, market_pairs)
+            get_first_last_starttime_from_sql(exchange_id, market_pairs)
             now = exchange.milliseconds()
 
             initial = True
+
+            try:
+                prev_first_starttime = copy.deepcopy(first_starttime)
+                prev_last_starttime = copy.deepcopy(last_starttime)
+
+                last_starttime_df.to_sql("last_starttime", con=conn, index=True, if_exists="replace")
+            except Exception as e:
+                print(e)
 
             break
             
