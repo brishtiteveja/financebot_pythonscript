@@ -102,7 +102,7 @@ def get_first_last_starttime_from_sql(exchange_id, market_pairs):
     if exchange_id == "coinbasepro":
         exchange_id = "gdax_0.1"
 
-    db_file = root + "/" + exchange_id + "_0.1.db"
+    db_file = history + "/" + exchange_id + "_0.1.db"
     try:
         conn = create_connection(db_file)
     except Exception as e:
@@ -257,8 +257,10 @@ def main():
         market["exchange"] = exchange_id
 
         ranges = {}
-        ranges["from"] = r["first_starttime"]
-        ranges["to"] = r["last_starttime"]
+        s = r["first_starttime"]
+        ranges["from"] = int(time.mktime(datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S").timetuple()))
+        s = r["last_starttime"]
+        ranges["to"] = int(time.mktime(datetime.datetime.strptime(s, "%Y-%m-%d %H:%M:%S").timetuple()))
         market["ranges"] = [ranges]
 
         scanned_markets["datasets"].append(market)

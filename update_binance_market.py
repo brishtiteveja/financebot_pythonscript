@@ -14,7 +14,7 @@ exchange = getattr(ccxt, exchange_id)({
 
 markets = exchange.load_markets()
 market_pairs = list(markets.keys())
-print("No. of market pairs = ", len(market_pairs))
+#print("No. of market pairs = ", len(market_pairs))
 
 gekko_market_pairs = []
 gekko_currencies = []

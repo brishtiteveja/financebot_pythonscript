@@ -15,12 +15,14 @@ while true;
 do
     cd $python_path
 	cmd="exchange_coindata_importer.py"
+	cmd2="create_scanned_markets_json.py"
 	res=$(ps aux | grep -v grep | grep $cmd)
 
 	if [ -z "$res" ] 
 	then
 		echo "Running the importer program again"
 		time python3 $cmd #> log_coindata_importer.txt
+		time python3 $cmd2
 		COUNTER=$[$COUNTER + 1]
         echo $COUNTER
 	else
